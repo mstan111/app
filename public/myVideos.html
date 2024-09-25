@@ -1,0 +1,68 @@
+<!-- This file, including the video list and download links, was created with ChatGPT's assistance -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Videos</title>
+</head>
+<body>
+    <h1>Your Uploaded Videos</h1>
+    <div id="videoList">
+        <!-- Video list and progress bars will be added after every upload -->
+    </div>
+    
+    <script>
+        // Function to fetch videos and display progress bars
+        async function fetchVideos() {
+            const response = await fetch('/api/myVideos', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (response.ok) {
+                const videos = await response.json();
+                const videoList = document.getElementById('videoList');
+
+                videos.forEach(video => {
+                    const videoItem = document.createElement('div');
+                    videoItem.innerHTML = `
+                        <h4>${video.transcodedFile}</h4>
+                        <progress id="progress-${video.transcodedFile}" value="0" max="100"></progress>
+                        <p><a href="/api/download/${video.transcodedFile}">Download Transcoded Video</a></p>
+                    `;
+                    videoList.appendChild(videoItem);
+
+                    // Call function to update progress for each video
+                    checkProgress(video.transcodedFile);
+                });
+            }
+        }
+
+        // Function to check transcoding progress for a specific video
+        async function checkProgress(transcodedFile) {
+            const response = await fetch(`/api/transcode-progress/${transcodedFile}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById(`progress-${transcodedFile}`).value = data.progress;
+
+                // Continue polling if not yet completed
+                if (data.progress < 100) {
+                    setTimeout(() => checkProgress(transcodedFile), 5000); // Poll every 5 seconds
+                }
+            }
+        }
+
+        // Fetch videos on page load
+        fetchVideos();
+    </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!-- The upload form and progress indication in this file were structured with the help of ChatGPT -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload File</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <h1>Upload a Video</h1>
+    
+    <!-- Form for file upload -->
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="uploadFile" name="uploadFile" required />
+        <input type="submit" value="Upload" />
+    </form>
+
+    //message display for upload status
+    <div id="uploadMessage"></div>
+
+    <script>
+        // Event listener for the file upload form
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault(); // Prevent the form from refreshing the page
+    
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
+            const formData = new FormData(this); // Collect the file to be uploaded
+    
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`, // Add the token to the request header
+                    },
+                    body: formData
+                });
+    
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('uploadMessage').innerText = 'File uploaded successfully!';
+                } else {
+                    document.getElementById('uploadMessage').innerText = 'File upload failed.';
+                }
+            } catch (error) {
+                document.getElementById('uploadMessage').innerText = 'Error occurred during upload.';
+            }
+        });
+    </script>
+</body>
+</html>

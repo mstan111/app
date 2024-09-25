@@ -1,0 +1,90 @@
+<!-- Login form structure generated with the assistance of ChatGPT -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <h1>Login</h1>
+    <form id="loginForm">
+        <input type="text" name="username" placeholder="Username" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <input type="submit" value="Login" />
+    </form>
+    <div id="loginMessage"></div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault(); // Prevent the form from refreshing the page
+
+            const formData = new FormData(this);
+            const username = formData.get('username');
+            const password = formData.get('password');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Save the token in localStorage
+                    localStorage.setItem('authToken', data.authToken);
+                    document.getElementById('loginMessage').innerText = 'Login successful!';
+                    // Redirect to main page after successful login
+                    window.location.href = '/';
+                } else {
+                    document.getElementById('loginMessage').innerText = 'Login failed. Please check your credentials.';
+                }
+            } catch (error) {
+                document.getElementById('loginMessage').innerText = 'Error occurred during login.';
+            }
+        });
+
+        // Function to attach the token in all API requests
+        function fetchWithAuth(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                console.error('No token found in localStorage');
+                throw new Error('User not authenticated');
+            }
+
+            // Set the Authorization header
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+
+            return fetch(url, options);
+        }
+
+        // Usage of the fetchWithAuth function for any API call
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Example of sending a file (adjust according to your form structure)
+            const formData = new FormData(this);
+    
+            fetchWithAuth('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Upload successful:', data);
+            })
+            .catch(error => {
+                console.error('Error during upload:', error);
+            });
+        });
+    </script>
+</body>
+</html>

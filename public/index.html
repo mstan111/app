@@ -1,0 +1,208 @@
+<!-- This file's structure and functionality, including the upload form and progress bar, were created with assistance from ChatGPT -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Page</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <h1>Main page</h1>
+    <a href="#" id="logoutBtn">Logout</a>
+    <a href="#" id="myVideosBtn">My Videos</a>
+
+    <form id="uploadForm">
+        <input type="file" name="uploadFile" />
+        <button type="submit">Upload!</button>
+    </form>
+
+    <!-- Display the message that upload has started -->
+    <h2 id="uploadStatus"></h2>
+
+    <!-- Progress bar for file upload -->
+    <h2>Upload Progress</h2>
+    <progress id="uploadProgressBar" value="0" max="100" style="width: 300px;"></progress>
+    <span id="uploadProgressPercent">0%</span>
+
+    <!-- Progress bar for transcoding -->
+    <h2>Transcoding Progress</h2>
+    <progress id="transcodeProgressBar" value="0" max="100" style="width: 300px;"></progress>
+    <span id="transcodeProgressPercent">0%</span>
+
+    <div id="videosList"></div>
+
+    <script>
+        // Attach event listener to the logout button
+        document.getElementById('logoutBtn').addEventListener('click', function() {
+            localStorage.removeItem('authToken');
+            window.location.href = '/login';
+        });
+
+        // Attach event listener to the upload form
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const token = localStorage.getItem('authToken');
+            const uploadProgressBar = document.getElementById('uploadProgressBar');
+            const uploadProgressPercent = document.getElementById('uploadProgressPercent');
+            const uploadStatus = document.getElementById('uploadStatus'); // Element to show status
+
+            // Show "Upload started" message
+            uploadStatus.innerText = "Upload started";
+
+            try {
+                const xhr = new XMLHttpRequest();
+
+                // Track upload progress
+                xhr.upload.onprogress = function(event) {
+                    if (event.lengthComputable) {
+                        const percentCompleted = Math.round((event.loaded / event.total) * 100);
+                        console.log(percentCompleted); // Log upload progress
+                        uploadProgressBar.value = percentCompleted;
+                        uploadProgressPercent.innerText = `${percentCompleted}%`;
+                    }
+                };
+
+                xhr.open('POST', '/api/upload', true);
+                xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const result = JSON.parse(xhr.responseText);
+
+                        // Update status message after upload completes
+                        uploadStatus.innerText = "Upload successful! Transcoding started...";
+                        console.log('Upload complete, transcoding started.');
+
+                        // Call function to track transcoding progress after upload
+                        trackTranscodeProgress(result.transcodedFile);
+                    } else {
+                        uploadStatus.innerText = "Upload failed!";
+                    }
+                };
+
+                xhr.onerror = function() {
+                    uploadStatus.innerText = "Upload error!";
+                };
+
+                xhr.send(formData); // Start the file upload
+            } catch (err) {
+                console.error('Upload error:', err);
+                uploadStatus.innerText = 'Upload error!';
+            }
+        });
+
+        // Function to track transcoding progress
+        async function trackTranscodeProgress(fileName) {
+            const token = localStorage.getItem('authToken');
+            const transcodeProgressBar = document.getElementById('transcodeProgressBar');
+            const transcodeProgressPercent = document.getElementById('transcodeProgressPercent');
+            const uploadStatus = document.getElementById('uploadStatus'); // Reuse the status element
+            
+            let intervalId = setInterval(async () => {
+                try {
+                    const progressResponse = await fetch(`/api/transcode-progress/${fileName}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                        }
+                    });
+
+                    if (progressResponse.ok) {
+                        const { progress } = await progressResponse.json();
+                        console.log('Transcoding Progress:', progress); // Log transcoding progress
+                        transcodeProgressBar.value = progress;
+                        transcodeProgressPercent.innerText = `${progress}%`;
+
+                        // If progress is 100, clear interval and show success
+                        if (progress >= 100) {
+                            clearInterval(intervalId);
+                            uploadStatus.innerText = `Transcoding completed! File: ${fileName}`;
+                            console.log('Transcoding completed.');
+                        }
+                    } else {
+                        console.error('Failed to fetch transcoding progress');
+                    }
+                } catch (err) {
+                    console.error('Error tracking transcoding progress:', err);
+                    clearInterval(intervalId); // Stop progress tracking if error occurs
+                }
+            }, 1000); // Poll every second
+        }
+
+        // Attach event listener to the My Videos button
+        document.getElementById('myVideosBtn').addEventListener('click', fetchVideos);
+
+        async function fetchVideos() {
+            const token = localStorage.getItem('authToken');
+
+            try {
+                const response = await fetch('/api/myVideos', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`, // Include Bearer token
+                    },
+                });
+
+                if (response.ok) {
+                    const videos = await response.json();
+                    const videoListDiv = document.getElementById('videosList');
+                    videoListDiv.innerHTML = ''; // Clear previous list
+                    videos.forEach(video => {
+                        const videoItem = document.createElement('div');
+                        videoItem.innerHTML = `
+                            <strong>${video.transcodedFile}</strong> (Uploaded: ${video.uploadDate}) 
+                            - <a href="#" class="download-link" data-file="${video.transcodedFile}">Download</a>
+                        `;
+                        videoListDiv.appendChild(videoItem);
+                    });
+
+                    // Attach download handlers to new download links
+                    attachDownloadHandlers();
+                } else {
+                    alert('Failed to fetch videos');
+                }
+            } catch (err) {
+                console.error('Error fetching videos:', err);
+            }
+        }
+
+        // Function to handle downloads with the Authorization token
+        function attachDownloadHandlers() {
+            const downloadLinks = document.querySelectorAll('.download-link');
+            downloadLinks.forEach(link => {
+                link.addEventListener('click', async function (e) {
+                    e.preventDefault();
+                    const fileName = this.getAttribute('data-file');
+                    const token = localStorage.getItem('authToken');
+
+                    try {
+                        const response = await fetch(`/api/download/${fileName}`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${token}`, // Attach the Bearer token
+                            },
+                        });
+
+                        if (response.ok) {
+                            // Convert response to a blob and download it
+                            const blob = await response.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fileName;
+                            document.body.appendChild(a); // Append for Firefox
+                            a.click();
+                            a.remove(); // Clean up after download
+                        } else {
+                            alert('Failed to download the video.');
+                        }
+                    } catch (err) {
+                        console.error('Download error:', err);
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
